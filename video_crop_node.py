@@ -44,6 +44,12 @@ class VideoCropNode:
                     "display": "number",
                     "tooltip": "Height of the cropped output"
                 }),
+            },
+            "optional": {
+                "round_to_8": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "Round dimensions to nearest multiple of 8 (better for video codecs and AI models)"
+                }),
             }
         }
     
@@ -57,7 +63,8 @@ class VideoCropNode:
         images: torch.Tensor, 
         mask: torch.Tensor, 
         target_width: int, 
-        target_height: int
+        target_height: int,
+        round_to_8: bool = False
     ) -> Tuple[torch.Tensor, torch.Tensor, Dict[str, Any]]:
         """
         Crop video frames centered on mask to achieve exact target dimensions.
@@ -67,6 +74,7 @@ class VideoCropNode:
             mask: Static mask same size as images (H, W) or (1, H, W)
             target_width: Desired output width
             target_height: Desired output height
+            round_to_8: Round dimensions to nearest multiple of 8
             
         Returns:
             Tuple of (cropped_images, cropped_mask, crop_metadata)
@@ -96,12 +104,20 @@ class VideoCropNode:
         if mask.shape[0] != orig_height or mask.shape[1] != orig_width:
             raise ValueError(f"Mask size {mask.shape} doesn't match image size ({orig_height}, {orig_width})")
         
+        # Round dimensions to nearest multiple of 8 if requested
+        if round_to_8:
+            actual_target_width = round(target_width / 8) * 8
+            actual_target_height = round(target_height / 8) * 8
+        else:
+            actual_target_width = target_width
+            actual_target_height = target_height
+        
         # Calculate crop region and padding (once for all frames since mask is static)
         crop_info = calculate_dynamic_padding(
             image_shape=(orig_height, orig_width),
             mask=mask,
-            target_width=target_width,
-            target_height=target_height
+            target_width=actual_target_width,
+            target_height=actual_target_height
         )
         
         # Create metadata object
