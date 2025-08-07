@@ -140,6 +140,10 @@ class VideoCropNode:
                 value=0.0
             ).squeeze(0)  # Remove batch dimension
         
+        # Expand the single cropped mask to match the batch size of images
+        # Shape: (H, W) -> (B, H, W) where B = batch_size
+        cropped_mask = cropped_mask.unsqueeze(0).expand(batch_size, -1, -1)
+        
         return (cropped_images, cropped_mask, metadata.to_dict())
     
     @classmethod
