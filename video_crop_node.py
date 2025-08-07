@@ -50,6 +50,10 @@ class VideoCropNode:
                     "default": False,
                     "tooltip": "Round dimensions to nearest multiple of 8 (better for video codecs and AI models)"
                 }),
+                "wan_numbers": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "Adjust frame count to 4n+1 format (5, 9, 13, 17, 21, etc.) for model compatibility"
+                }),
             }
         }
     
@@ -64,7 +68,8 @@ class VideoCropNode:
         mask: torch.Tensor, 
         target_width: int, 
         target_height: int,
-        round_to_8: bool = False
+        round_to_8: bool = False,
+        wan_numbers: bool = False
     ) -> Tuple[torch.Tensor, torch.Tensor, Dict[str, Any]]:
         """
         Crop video frames centered on mask to achieve exact target dimensions.
@@ -75,6 +80,7 @@ class VideoCropNode:
             target_width: Desired output width
             target_height: Desired output height
             round_to_8: Round dimensions to nearest multiple of 8
+            wan_numbers: Adjust frame count to 4n+1 format (5, 9, 13, 17, 21, etc.)
             
         Returns:
             Tuple of (cropped_images, cropped_mask, crop_metadata)
@@ -84,6 +90,37 @@ class VideoCropNode:
             raise ValueError(f"Expected 4D images tensor (B, H, W, C), got {images.shape}")
         
         batch_size, orig_height, orig_width, channels = images.shape
+        
+        # Adjust frame count for wan numbers (4n+1 format) if requested
+        if wan_numbers:
+            # Calculate the closest 4n+1 number
+            if batch_size <= 5:
+                target_frames = 5
+            else:
+                # Find closest 4n+1: current frames = 4n+r, we want 4m+1
+                remainder = (batch_size - 1) % 4
+                if remainder == 0:
+                    # Already 4n+1, keep as is
+                    target_frames = batch_size
+                else:
+                    # Round to nearest 4n+1
+                    if remainder <= 2:
+                        # Round down to previous 4n+1
+                        target_frames = batch_size - remainder
+                    else:
+                        # Round up to next 4n+1
+                        target_frames = batch_size + (4 - remainder)
+            
+            # Adjust the batch by trimming or repeating frames
+            if target_frames < batch_size:
+                # Trim frames from the end
+                images = images[:target_frames]
+                batch_size = target_frames
+            elif target_frames > batch_size:
+                # Repeat last frame to reach target
+                last_frame = images[-1:].expand(target_frames - batch_size, -1, -1, -1)
+                images = torch.cat([images, last_frame], dim=0)
+                batch_size = target_frames
         
         # Handle mask dimensions - it can be (H, W), (1, H, W), or (B, H, W)
         if mask.dim() == 3:
