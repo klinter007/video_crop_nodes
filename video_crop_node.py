@@ -46,7 +46,7 @@ class VideoCropNode:
                 }),
             },
             "optional": {
-                "round_to_8": ("BOOLEAN", {
+                "size_rounded_to_8": ("BOOLEAN", {
                     "default": False,
                     "tooltip": "Round dimensions to nearest multiple of 8 (better for video codecs and AI models)"
                 }),
@@ -68,7 +68,7 @@ class VideoCropNode:
         mask: torch.Tensor, 
         target_width: int, 
         target_height: int,
-        round_to_8: bool = False,
+        size_rounded_to_8: bool = False,
         wan_numbers: bool = False
     ) -> Tuple[torch.Tensor, torch.Tensor, Dict[str, Any]]:
         """
@@ -79,7 +79,7 @@ class VideoCropNode:
             mask: Static mask same size as images (H, W) or (1, H, W)
             target_width: Desired output width
             target_height: Desired output height
-            round_to_8: Round dimensions to nearest multiple of 8
+            size_rounded_to_8: Round dimensions to nearest multiple of 8
             wan_numbers: Adjust frame count to 4n+1 format (5, 9, 13, 17, 21, etc.)
             
         Returns:
@@ -138,7 +138,7 @@ class VideoCropNode:
             raise ValueError(f"Mask size {mask.shape} doesn't match image size ({orig_height}, {orig_width})")
         
         # Round dimensions to nearest multiple of 8 if requested
-        if round_to_8:
+        if size_rounded_to_8:
             actual_target_width = round(target_width / 8) * 8
             actual_target_height = round(target_height / 8) * 8
         else:
