@@ -19,6 +19,7 @@ class VideoCropNode:
     - The mask position is static across all frames
     - You want exact output dimensions (e.g., 1500x520)
     - Padding is calculated dynamically to include the masked area
+    - Outputs both cropped images and corresponding cropped mask
     """
     
     @classmethod
@@ -46,8 +47,8 @@ class VideoCropNode:
             }
         }
     
-    RETURN_TYPES = ("IMAGE", "CROP_METADATA")
-    RETURN_NAMES = ("cropped_images", "crop_metadata")
+    RETURN_TYPES = ("IMAGE", "MASK", "CROP_METADATA")
+    RETURN_NAMES = ("cropped_images", "cropped_mask", "crop_metadata")
     FUNCTION = "crop_video_frames"
     CATEGORY = "video/crop"
     
@@ -57,7 +58,7 @@ class VideoCropNode:
         mask: torch.Tensor, 
         target_width: int, 
         target_height: int
-    ) -> Tuple[torch.Tensor, Dict[str, Any]]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, Dict[str, Any]]:
         """
         Crop video frames centered on mask to achieve exact target dimensions.
         
@@ -68,7 +69,7 @@ class VideoCropNode:
             target_height: Desired output height
             
         Returns:
-            Tuple of (cropped_images, crop_metadata)
+            Tuple of (cropped_images, cropped_mask, crop_metadata)
         """
         
         if images.dim() != 4:
@@ -113,9 +114,12 @@ class VideoCropNode:
         # Crop all frames
         cropped_images = images[:, top:bottom, left:right, :]
         
+        # Crop the mask using the same coordinates
+        cropped_mask = mask[top:bottom, left:right]
+        
         # Apply padding if needed (use reflect mode for natural-looking extension)
         if any(p > 0 for p in crop_info['padding']):
-            # Convert to (B, C, H, W) for padding
+            # Convert images to (B, C, H, W) for padding
             cropped_images = cropped_images.permute(0, 3, 1, 2)
             
             # Apply padding with reflect mode (mirrors image content at boundaries)
@@ -125,10 +129,18 @@ class VideoCropNode:
                 mode='reflect'
             )
             
-            # Convert back to (B, H, W, C)
+            # Convert images back to (B, H, W, C)
             cropped_images = cropped_images.permute(0, 2, 3, 1)
+            
+            # Apply padding to mask (use constant mode with 0 for mask padding)
+            cropped_mask = F.pad(
+                cropped_mask.unsqueeze(0),  # Add batch dimension for padding
+                (pad_left, pad_right, pad_top, pad_bottom),
+                mode='constant',
+                value=0.0
+            ).squeeze(0)  # Remove batch dimension
         
-        return (cropped_images, metadata.to_dict())
+        return (cropped_images, cropped_mask, metadata.to_dict())
     
     @classmethod
     def IS_CHANGED(cls, **kwargs):
