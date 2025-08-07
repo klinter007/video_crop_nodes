@@ -123,14 +123,10 @@ class VideoCropNode:
                 batch_size = target_frames
         
         # Handle mask dimensions - it can be (H, W), (1, H, W), or (B, H, W)
+        # Always convert to single 2D mask since we use static mask for all frames
         if mask.dim() == 3:
-            # If mask has batch dimension, take the first frame (assuming static mask)
-            if mask.shape[0] == batch_size:
-                # Mask has same batch size as images - use first frame
-                mask = mask[0]
-            else:
-                # Mask has different batch size - squeeze if possible
-                mask = mask.squeeze(0)
+            # Take the first frame as our static mask (regardless of batch size)
+            mask = mask[0]
         elif mask.dim() == 2:
             # Already 2D, perfect
             pass
